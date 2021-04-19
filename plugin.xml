@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
 		xmlns:android="http://schemas.android.com/apk/res/android"
-        id="cmb-sdk-cordova-plugin" version="1.2.18">
+        id="cmb-sdk-cordova-plugin" version="1.2.21">
     <name>CMBScanner</name>
     <description>CMB Scanner Cordova Plugin</description>
 	<author>DG</author>
@@ -83,7 +83,7 @@
 
 		<!-- SDK -->
         <!-- lib -->
-        <framework src="src/ios/CMBScanner/SDK/cmbsdk-ios-binary/framework/cmbSDK/device_only/cmbSDK.framework" embed="true" custom="true" />
+        <framework src="src/ios/CMBScanner/SDK/cmbsdk-ios-binary/framework/cmbSDK/device_simulator/cmbSDK.xcframework" embed="true" custom="true" />
 
         <!-- Camera Overlay -->
         <resource-file src="src/ios/CMBScanner/SDK/cmbsdk-ios-binary/Resources/CMBScannerPartialView.xib" target-dir="CMBScanner/SDK" />

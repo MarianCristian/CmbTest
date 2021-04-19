@@ -6,8 +6,8 @@ repositories{
 }
 
 dependencies {
-    compile 'com.android.support:support-v4:+'
-    compile(name:'cmbsdklib-release', ext:'aar')
+    implementation 'com.android.support:support-v4:26.+'
+    implementation(name:'cmbsdklib-release', ext:'aar')
 }
 
 android {

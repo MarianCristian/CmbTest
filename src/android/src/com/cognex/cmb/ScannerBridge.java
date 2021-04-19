@@ -1,7 +1,6 @@
 package com.cognex.cmb;
 
 import android.Manifest;
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -11,8 +10,8 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Point;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
+import android.net.Uri;
+import android.os.Build;
 import android.util.Base64;
 import android.util.Log;
 import android.view.Display;
@@ -32,7 +31,7 @@ import com.cognex.mobile.barcode.sdk.ReadResult;
 import com.cognex.mobile.barcode.sdk.ReadResults;
 import com.cognex.mobile.barcode.sdk.ReaderDevice;
 import com.manateeworks.BarcodeScanner;
-import com.manateeworks.MWOverlay;
+import com.manateeworks.mwoverlay.MWOverlay;
 
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
@@ -41,7 +40,12 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Field;
 
 /**
@@ -49,6 +53,11 @@ import java.lang.reflect.Field;
  */
 public class ScannerBridge extends CordovaPlugin implements
         ReaderDevice.ReaderDeviceListener {
+
+    enum ImageSourceType {
+        URI,
+        BASE64
+    }
 
     int param_cameraMode = 0;
     int param_previewOptions = 0;
@@ -194,13 +203,8 @@ public class ScannerBridge extends CordovaPlugin implements
             resetConfig(callbackContext);
             return true;
         } else if (action.equals("sendCommand")) {
-            String commandString = "";
-            try {
-                commandString = args.getString(0);
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
-            sendCommand(callbackContext, commandString);
+            sendCommand(callbackContext, parseFirstStringFromJSONArray(args));
+
             return true;
         } else if (action.equals("setPreviewContainerPositionAndSize")) {
             try {
@@ -260,11 +264,8 @@ public class ScannerBridge extends CordovaPlugin implements
             beep(callbackContext);
             return true;
         } else if (action.equals("registerSDK")) {
-            try {
-                registrationKey = args.getString(0);
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
+            registrationKey = parseFirstStringFromJSONArray(args);
+
             return true;
         } else if (action.equals("enableCameraFlag")) {
             int codeMask = 0;
@@ -298,15 +299,9 @@ public class ScannerBridge extends CordovaPlugin implements
             setCameraDuplicatesTimeout(timeout);
             return true;
         } else if (action.equals("showToast")) {
-            String message = null;
+            String message = parseFirstStringFromJSONArray(args);
 
-            try {
-                message = args.getString(0);
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
-
-            if (message != null)
+            if (!"".equals(message))
                 showToast(message);
 
             return true;
@@ -363,9 +358,29 @@ public class ScannerBridge extends CordovaPlugin implements
             }
 
             return true;
+        } else if(action.equals("scanImageFromUri")) {
+
+            scanImage(parseFirstStringFromJSONArray(args), ImageSourceType.URI, callbackContext);
+
+            return true;
+        } else if(action.equals("scanImageFromBase64")) {
+
+            scanImage(parseFirstStringFromJSONArray(args), ImageSourceType.BASE64,callbackContext);
+
+            return true;
         }
 
         return false;
+    }
+
+    private String parseFirstStringFromJSONArray(JSONArray args) {
+        try {
+            return args.getString(0);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        return "";
     }
 
     //Custom API methods
@@ -1108,12 +1123,12 @@ public class ScannerBridge extends CordovaPlugin implements
     public void CheckCameraPermission(CallbackContext callbackContext)
     {
         PluginResult pr;
-        if(ContextCompat.checkSelfPermission(cordova.getActivity(), Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+        if(cordova.hasPermission(Manifest.permission.CAMERA)) {
             pr = new PluginResult(PluginResult.Status.OK);
         }
         else {
             try {
-                if (firstCameraPermissionCheck || shouldShowRequestPermissionRationale(cordova.getActivity(), Manifest.permission.CAMERA)){
+                if (firstCameraPermissionCheck || shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)){
                     pr = new PluginResult(PluginResult.Status.ERROR, 1);
                 }
                 else {
@@ -1130,13 +1145,13 @@ public class ScannerBridge extends CordovaPlugin implements
     public void RequestCameraPermission(CallbackContext callbackContext)
     {
         PluginResult pr;
-        if(ContextCompat.checkSelfPermission(cordova.getActivity(), Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+        if(cordova.hasPermission(Manifest.permission.CAMERA)) {
             pr = new PluginResult(PluginResult.Status.OK);
             callbackContext.sendPluginResult(pr);
         }
         else {
             try {
-                if (firstCameraPermissionCheck || shouldShowRequestPermissionRationale(cordova.getActivity(), Manifest.permission.CAMERA)){
+                if (firstCameraPermissionCheck || shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)){
                     cordova.requestPermission(ScannerBridge.this, 567, Manifest.permission.CAMERA);
                 }
                 else {
@@ -1158,7 +1173,7 @@ public class ScannerBridge extends CordovaPlugin implements
             firstCameraPermissionCheck = false;
             if (grantResults.length > 0 && grantResults[0] != PackageManager.PERMISSION_GRANTED) {
                 try {
-                    if (shouldShowRequestPermissionRationale(cordova.getActivity(), Manifest.permission.CAMERA)) {
+                    if (shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
                         new AlertDialog.Builder(cordova.getActivity())
                                 .setMessage(
                                         "You need to allow access to the Camera")
@@ -1218,15 +1233,90 @@ public class ScannerBridge extends CordovaPlugin implements
         }
     }
 
-    private boolean shouldShowRequestPermissionRationale(Activity activity, String permission) throws Exception {
-        boolean shouldShow;
-        try {
-            java.lang.reflect.Method method = ActivityCompat.class.getMethod("shouldShowRequestPermissionRationale", Activity.class, java.lang.String.class);
-            Boolean bool = (Boolean) method.invoke(null, activity, permission);
-            shouldShow = bool.booleanValue();
-        } catch (NoSuchMethodException e) {
-            throw new Exception("shouldShowRequestPermissionRationale() method not found in ActivityCompat class. Check you have Android Support Library v23+ installed");
+    private boolean shouldShowRequestPermissionRationale(String permission) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+            return cordova.getActivity().shouldShowRequestPermissionRationale(permission);
+        else
+            return false;
+    }
+
+    private void scanImage(String source, ImageSourceType sourceType, CallbackContext callbackContext) {
+        if(isReaderInit(callbackContext)) {
+            if ("".equals(source)) {
+                callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, "Invalid image source"));
+                return;
+            }
+
+            if (readerDevice.getConnectionState() != ConnectionState.Connected) {
+                callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, "Reader device not connected"));
+                return;
+            }
+
+            byte[] byteArray = null;
+
+            if(sourceType == ImageSourceType.BASE64) {
+                try {
+                    byteArray = Base64.decode(source, Base64.DEFAULT);
+                }
+                catch (Exception e) {
+                    e.printStackTrace();
+                    callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, e.getLocalizedMessage()));
+                    return;
+                }
+            } else if(sourceType == ImageSourceType.URI) {
+                if(source.startsWith("content://")) {
+                    try (InputStream imageStream = cordova.getActivity().getContentResolver().openInputStream(Uri.parse(source));
+                         ByteArrayOutputStream buffer = new ByteArrayOutputStream()) {
+
+                        int nRead;
+                        byte[] bytes = new byte[1024];
+                        while ((nRead = imageStream.read(bytes, 0, bytes.length)) != -1) {
+                            buffer.write(bytes, 0, nRead);
+                        }
+
+                        buffer.flush();
+                        byteArray = buffer.toByteArray();
+
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, e.getLocalizedMessage()));
+                        return;
+                    }
+                } else {
+
+                    if(!source.startsWith("file://"))
+                        source = "file://" + source;
+
+                    File file = new File(Uri.parse(source).getPath());
+                    int size = (int) file.length();
+
+                    byteArray = new byte[size];
+
+                    try(FileInputStream fis = new FileInputStream(file);
+                        BufferedInputStream buf = new BufferedInputStream(fis)) {
+
+                        buf.read(byteArray, 0, byteArray.length);
+
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, e.getLocalizedMessage()));
+                        return;
+                    }
+                }
+            }
+
+            if(byteArray != null && byteArray.length > 0) {
+                readerDevice.getDataManSystem().sendCommand(String.format("IMAGE.LOAD %d", byteArray.length), byteArray,
+                        500, false, (dataManSystem, response) -> {
+                            if (response.getError() != null) {
+                                callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, response.getError().getLocalizedMessage()));
+                            } else {
+                                callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK));
+                            }
+                        });
+            } else {
+                callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, "Failed to read image"));
+            }
         }
-        return shouldShow;
     }
 }

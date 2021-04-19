@@ -2,6 +2,7 @@
 
 #import <Cordova/CDV.h>
 #import <cmbSDK/cmbSDK.h>
+#import <Photos/Photos.h>
 
 #pragma INTERFACE
 @interface CMBScanner : CDVPlugin {
@@ -13,6 +14,11 @@
 -(void)availabilityDidChangeOfReaderCallback:(CDVInvokedUrlCommand*)cdvCommand;
 -(void)connectionStateDidChangeOfReaderCallback:(CDVInvokedUrlCommand*)cdvCommand;
 
+// plugin enums
+typedef enum : NSUInteger {
+    ImageSourceTypeUri,
+    ImageSourceTypeBase64
+} ImageSourceType;
 
 // public methods
 -(void)loadScanner:(CDVInvokedUrlCommand*)cdvCommand;
@@ -49,6 +55,10 @@
 -(void)requestCameraPermission:(CDVInvokedUrlCommand*)cdvCommand;
 -(void)setParser:(CDVInvokedUrlCommand*)cdvCommand;
 -(void)setStopScannerOnRotate:(CDVInvokedUrlCommand*)cdvCommand;
+-(void)scanImageFromUri:(CDVInvokedUrlCommand*)cdvCommand;
+-(void)scanImageFromBase64:(CDVInvokedUrlCommand*)cdvCommand;
+-(void)setMDMReportingEnabled:(CDVInvokedUrlCommand*)cdvCommand;
+-(void)createMDMAuthCredentials:(CDVInvokedUrlCommand*)cdvCommand;
 @end
 
 // CMBReaderDevice delegate
@@ -75,6 +85,8 @@ float param_sizeHeight = 50;
 int param_triggerType = 2;
 int param_deviceType = 0;
 BOOL param_closeScannerOnRotate = NO;
+BOOL param_mdmReportingEnabled = NO;
+MDMAuthCredentials *param_defaultMdmAuthCredentials;
 
 CMBReaderDevice *readerDevice;
 NSString *regKey = nil;
@@ -118,6 +130,10 @@ UITextView *cmbToastView;
             break;
     }
     
+    if (param_defaultMdmAuthCredentials) {
+        readerDevice.dataManSystem.defaultMDMAuthCredentials = param_defaultMdmAuthCredentials;
+    }
+    readerDevice.dataManSystem.MDMReportingEnabled  = param_mdmReportingEnabled;
     readerDevice.delegate = self;
     
     CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsBool:YES];
@@ -135,7 +151,7 @@ UITextView *cmbToastView;
     }else{
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                  selector:@selector(appDidRotate:)
-                                                     name:@"UIDeviceOrientationDidChangeNotification" object:nil];
+                                                     name:UIApplicationDidChangeStatusBarOrientationNotification object:nil];
     }
 }
 
@@ -814,9 +830,117 @@ BOOL issScanning = NO;
     [readerDevice stopScanning];
 }
 
+-(void)scanImageFromUri:(CDVInvokedUrlCommand*)cdvCommand {
+    [self scanImageFromSource:[cdvCommand.arguments firstObject] imageSourceType:ImageSourceTypeUri callback:cdvCommand];
+}
+
+-(void)scanImageFromBase64:(CDVInvokedUrlCommand*)cdvCommand {
+    [self scanImageFromSource:[cdvCommand.arguments firstObject] imageSourceType:ImageSourceTypeBase64 callback:cdvCommand];
+}
+
+-(void) scanImageFromSource:(NSString*) imageSource imageSourceType:(ImageSourceType) imageSourceType callback:(CDVInvokedUrlCommand*) cdvCommand {
+    if ([self isReaderInit:cdvCommand]) {
+        if ([readerDevice connectionState] != CMBConnectionStateConnected) {
+            [self scanImageFailWithMessage:@"Reader device not connected" callbackID:cdvCommand.callbackId];
+            return;
+        }
+        
+        if (!imageSource || [@"" isEqualToString:imageSource]) {
+            [self scanImageFailWithMessage:@"Invalid image source" callbackID:cdvCommand.callbackId];
+            return;
+        }
+        
+        switch (imageSourceType) {
+            case ImageSourceTypeUri:{
+                NSURL *imagePath = [NSURL URLWithString:imageSource];
+                if (!imagePath) {
+                    [self scanImageFailWithMessage:@"Invalid Uri" callbackID:cdvCommand.callbackId];
+                    return;
+                }
+                
+                if ([imageSource hasPrefix:@"assets-library"]) {
+                    // Using assets-library uri
+                    [PHPhotoLibrary requestAuthorization:^(PHAuthorizationStatus status) {
+                        if (status == PHAuthorizationStatusAuthorized) {
+                            // Create a Photo Asset from the ALAsset URL
+                            PHFetchResult<PHAsset *> *fetchResult = [PHAsset fetchAssetsWithALAssetURLs:@[imagePath] options:nil];
+                            if (fetchResult.count > 0) {
+                                PHAsset *asset = fetchResult.firstObject;
+                                
+                                // Request image data from the PHAsset
+                                [[PHImageManager defaultManager] requestImageDataForAsset:asset options:nil resultHandler:^(NSData * _Nullable imageData, NSString * _Nullable dataUTI, UIImageOrientation orientation, NSDictionary * _Nullable info) {
+                                    [self scanImageWithData:imageData callbackID:cdvCommand.callbackId];
+                                }];
+                            } else {
+                                [self scanImageFailWithMessage:@"Invalid Uri" callbackID:cdvCommand.callbackId];
+                            }
+                        }
+                    }];
+                } else {
+                    NSData *imageData = [[NSFileManager defaultManager] contentsAtPath:[imagePath path]];
+                    [self scanImageWithData:imageData callbackID:cdvCommand.callbackId];
+                }
+                break;
+            }
+                
+            case ImageSourceTypeBase64:{
+                NSData *imageData = [NSData.alloc initWithBase64EncodedString:imageSource options:0];
+                [self scanImageWithData:imageData callbackID:cdvCommand.callbackId];
+                break;
+            }
+        }
+    };
+}
+
+-(void) scanImageWithData:(NSData*) imageData callbackID:(NSString*) callbackId{
+    if (imageData) {
+        [readerDevice.dataManSystem sendCommand:[NSString stringWithFormat:@"IMAGE.LOAD %lu", (unsigned long)[imageData length]] withData:imageData timeout:100 expectBinaryResponse:NO callback:^(CDMResponse *response) {
+            if (response.status != DMCC_STATUS_NO_ERROR) {
+                [self scanImageFailWithMessage:response.payload callbackID:callbackId];
+            } else {
+                CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:response.payload];
+                [self.commandDelegate sendPluginResult:result callbackId:callbackId];
+            }
+        }];
+    } else {
+        [self scanImageFailWithMessage:@"Failed to read image" callbackID:callbackId];
+    }
+}
+
+- (void)scanImageFailWithMessage:(NSString*) message callbackID:(NSString*) callbackId {
+    CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:message];
+    [self.commandDelegate sendPluginResult:result callbackId:callbackId];
+}
+
 -(void) disconnectReaderDevice {
     if (readerDevice != nil && readerDevice.connectionState != CMBConnectionStateDisconnected && readerDevice.connectionState != kCDMConnectionStateDisconnecting) {
         [readerDevice disconnect];
+    }
+}
+
+-(void)setMDMReportingEnabled:(CDVInvokedUrlCommand*)cdvCommand {
+    param_mdmReportingEnabled = [cdvCommand.arguments.firstObject boolValue];
+
+    if ([self isReaderInit:nil]) {
+        readerDevice.dataManSystem.MDMReportingEnabled  = param_mdmReportingEnabled;
+    }
+}
+
+-(void)createMDMAuthCredentials:(CDVInvokedUrlCommand*)cdvCommand {
+    NSDictionary *commandArguments = [[cdvCommand arguments] firstObject];
+    NSString *username = commandArguments[@"username"];
+    NSString *password = commandArguments[@"password"];
+    NSString *clientID = commandArguments[@"clientID"];
+    NSString *clientSecret = commandArguments[@"clientSecret"];
+    
+    param_defaultMdmAuthCredentials = [MDMAuthCredentials new];
+    param_defaultMdmAuthCredentials.username = username;
+    param_defaultMdmAuthCredentials.password = password;
+    param_defaultMdmAuthCredentials.clientID = clientID;
+    param_defaultMdmAuthCredentials.clientSecret = clientSecret;
+    
+    if ([self isReaderInit:nil]) {
+        readerDevice.dataManSystem.defaultMDMAuthCredentials = param_defaultMdmAuthCredentials;
     }
 }
 

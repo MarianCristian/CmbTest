@@ -1,13 +1,14 @@
 /**
- * @deprecated
  * @file    BarcodeScanner.h
  * @brief   Barcode Decoders Library
  * @n       (C) Cognex Corporation, 2017.
  *
- *          This header file and its associated API is now deprecated in favor
- *          of the Cognex Mobile Barcode SDK's easy API. Unless explicitly 
- *          directed to use this header/API, all appplications should now only 
- *          be using ReaderDevice.
+ * \ifnot MWBSDK
+ *          Cognex Mobile Barcode SDK's easy API is preferred instead of this header file and its associated legacy API.
+ *          Unless explicitly directed to use this header/API, all new applications should now only be using ReaderDevice.
+ *          Applications that use this API, may still use it, there is no need for migraton as it will be not removed
+ *          without further notice.
+ * \endif
  */
 
 #ifndef _BARCODESCANNER_H_
@@ -199,7 +200,10 @@ typedef unsigned char uint8_t;
 
 // working for Datamatrix currently
 #define  MWB_PAR_ID_SCAN_COLOR  0x40
-    
+
+//set safe zone scale factor for 1D barcode type in range 0 - 100%
+#define  MWB_PAR_ID_SAFE_ZONE_SCALE  0x80
+
 /**/
 
 /** @brief  Barcode param values
@@ -221,8 +225,6 @@ typedef unsigned char uint8_t;
     
 /**/
 
-    
-    
 
 /** @} */
 
@@ -373,21 +375,21 @@ enum res_types {
  * @{ */
 
     
-    /**
-     * @name Identifiers for result types
-     * @{ */
+/**
+ * @name Identifiers for result types
+ * @{ */
     
 #define MWB_RESULT_TYPE_RAW                 0x00000001u
 #define MWB_RESULT_TYPE_MW                  0x00000002u
 //#define MWB_RESULT_TYPE_JSON                0x00000003u //not yet implemented
     
     
-    /** @} */
+/** @} */
     
     
-    /**
-     * @name Identifiers for result fields types
-     * @{ */
+/**
+ * @name Identifiers for result fields types
+ * @{ */
 #define MWB_RESULT_FT_BYTES                 0x00000001u
 #define MWB_RESULT_FT_TEXT                  0x00000002u
 #define MWB_RESULT_FT_TYPE                  0x00000003u
@@ -416,15 +418,11 @@ enum res_types {
 #define MWB_RESULT_FT_PDF_CODEWORDS         0x00000024u
     
     
+/** @} */
     
-
-    
-
-    /** @} */
-    
-    /**
-     * @name Descriptive names of result field types
-     * @{ */
+/**
+ * @name Descriptive names of result field types
+ * @{ */
 #define MWB_RESULT_FNAME_BYTES              "Bytes"
 #define MWB_RESULT_FNAME_TEXT               "Text"
 #define MWB_RESULT_FNAME_TYPE               "Type"
@@ -453,7 +451,7 @@ enum res_types {
 #define MWB_RESULT_FNAME_PDF_CODEWORDS      "PDF417 Codewords"
 
     
-    /** @} */
+/** @} */
     
     
 
@@ -993,6 +991,8 @@ extern int MWB_setDuplicatesTimeout(uint32_t timeout);
  * Set code which would be check for a duplicate
  */
 extern void MWB_setDuplicate(uint8_t* barcode, int length);
+
+/** @} */
 
 
 #ifdef __cplusplus

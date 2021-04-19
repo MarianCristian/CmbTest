@@ -101,6 +101,18 @@ typedef enum : NSUInteger {
 } CMBResultParser;
 
 /**
+* Possible values of Read String encoding for {@link CMBReaderDevice}
+*/
+typedef enum : NSUInteger {
+    CMBReadStringEncodingUTF_8,
+    CMBReadStringEncodingUTF_16,
+    CMBReadStringEncodingUTF_32,
+    CMBReadStringEncodingISO_8859_1,
+    CMBReadStringEncodingISO_8859_2,
+    CMBReadStringEncodingShift_JIS
+} CMBReadStringEncoding;
+
+/**
  * Delagate protocol for receiving events from a {@link CMBReaderDevice} object
  */
 @protocol CMBReaderDeviceDelegate <NSObject>
@@ -167,6 +179,12 @@ typedef enum : NSUInteger {
  * @see CMBResultParser
  */
 @property (readwrite) CMBResultParser parser;
+
+/**
+ * Set the {@link CMBReadStringEncoding} that is used to decode Read String from base64 result
+ * @see CMBReadStringEncoding
+*/
+@property (readwrite) CMBReadStringEncoding readStringEncoding;
 
 /**
  * Delegate object to receive events from the {@link CMBReaderDevice} object

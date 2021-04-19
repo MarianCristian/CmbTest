@@ -13,7 +13,7 @@ You can find detailed information about using cmbSDK in our programmer guide: ht
 #import <Foundation/Foundation.h>
 #import <ExternalAccessory/ExternalAccessory.h>
 #import "CDMDataManSystemDelegate.h"
-
+@class MDMAuthCredentials;
 
 /**
  *  Image size.
@@ -246,6 +246,16 @@ typedef NS_OPTIONS(NSInteger, CDMPreviewOption)
  * Timeout for commands and connection, default value is 5 sec.
  */
 @property (nonatomic) NSTimeInterval timeout;
+
+/**
+ * Default credentials for MDM communication. Credentials provided by managed app configuration will override this property per field basis.
+ */
+@property (nonatomic) MDMAuthCredentials *defaultMDMAuthCredentials;
+
+/**
+ * Enables reporting properties of the connected MX device to an MDM system. Default value is false.
+ */
+@property (nonatomic) BOOL MDMReportingEnabled;
 
 /**
  * Read-only connection state of the system.

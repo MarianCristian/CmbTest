@@ -1,4 +1,14 @@
 /**
+ *   version 1.2.21
+ *   -  Update to cmbSDK v2.4.2 for iOS and v2.4.1 for android
+ *   -  Added createMDMAuthCredentials(username, password, clientID, clientSecret) (iOS only) for creating authentication credentials used for MDM reporting. Should be called before setMDMReportingEnabled.
+*   version 1.2.20
+*   -  Update to cmbSDK v2.4.1 for iOS and v2.4.0 for android
+*   -  Added setMDMReportingEnabled (iOS only) for remote collection of up-to-date information about battery level, battery health, installed firmware, etc
+*   version 1.2.19
+*   -  Update to cmbSDK v2.3.1
+*   -  Added scanImageFromUri(imageUri, callback) method for image scanning
+*   -  Added scanImageFromBase64(base64, callback) method for image scanning
 *   version 1.2.18
 *   -  Update to cmbSDK v2.3.0
 *   -  In gradle file 'compile' is replaced with 'implementation' because is obsolete and throws warning in build process
@@ -716,9 +726,39 @@ CMBsetParser: function(parser) {
 */
 CMBsetStopScannerOnRotate: function(enable) {
     cordova.exec(function(){}, function(){}, serviceClass, "setStopScannerOnRotate", [enable]);
+},
+
+/**
+* Use this function to scan image from URI
+*/
+CMBscanImageFromUri: function(imageUri, successCallback, errorCallback) {
+   cordova.exec(successCallback, errorCallback, serviceClass, "scanImageFromUri", [imageUri]);
+},
+
+/**
+* Use this function to scan image from base64 string representation
+*/
+CMBscanImageFromBase64: function(base64, successCallback, errorCallback) {
+   cordova.exec(successCallback, errorCallback, serviceClass, "scanImageFromBase64", [base64]);
+},
+
+/**
+* Enable/Disable MDM reporting for remote collection of up-to-date information about battery level, battery health, installed firmware, etc.
+* @param enable
+*/
+CMBsetMDMReportingEnabled: function(enable) {
+    cordova.exec(function(){}, function(){}, serviceClass, "setMDMReportingEnabled", [enable]);
+},
+    
+/**
+* Create authentication credentials for MDM reporting. Should be called before setMDMReportingEnabled.
+* @params username, password, clientID, clientSecret
+*/
+CMBcreateMDMAuthCredentials: function(username, password, clientID, clientSecret) {
+    cordova.exec(function(){}, function(){}, serviceClass, "createMDMAuthCredentials", [{"username":username, "password":password, "clientID":clientID, "clientSecret":clientSecret}]);
 }
 };
-
+    
 var Scanner = function(){
 
     this.activeResultCallback = DEFAULT_CALLBACKS.scanResultCallback;
@@ -1802,6 +1842,113 @@ Scanner.prototype.setStopScannerOnRotate = function(enable){
 
 Scanner.prototype.CONSTANTS = CONSTANTS;
 
+/**
+*   @name: scanImageFromUri
+*   @desc:  Scan image from Uri
+*   @params: (string) imageUri - string representation of imageUri
+             (function) callback
+    @return A promise that contains the JSON object
+            {
+                (string) imageUri  : uri that is used
+                (bool) status  : did it succeed or not, if an error happened it will be set to false
+                err     : the error message if the action didn't complete
+            }
+*/
+Scanner.prototype.scanImageFromUri = function(imageUri, callback){
 
+    callback = (typeof callback === 'function') ? callback : function(result){return result;};
 
+    return (function(){
+        return new Promise(function(resolve,reject){
+                    var result = {
+                        uri: imageUri,
+                        status : false,
+                        err : null
+                    };
+
+                    if(imageUri === null || imageUri === 'undefined') {
+                        result.err = "Invalid Uri";
+                        resolve(result);
+                    }
+                    else{
+                        BarcodeScanner.CMBscanImageFromUri(imageUri, function(res){
+                            result.status = true;
+                            resolve(result);
+                        }, function(err){
+                            result.err = err;
+                            resolve(result);
+                        });
+                    }
+                })
+        })()
+        .then(callback) //call the callback if it has been set with a traditional method as a parameter
+        .catch(callback); //catch unhandled errors here
+};
+
+/**
+*   @name: scanImageFromBase64
+*   @desc:  Scan image from Base64 string representation
+*   @params: (string) base64 - Base64 string representation of image
+             (function) callback
+    @return A promise that contains the JSON object
+            {
+                (string) base64  : base64 string that is used
+                (bool) status  : did it succeed or not, if an error happened it will be set to false
+                err     : the error message if the action didn't complete
+            }
+*/
+Scanner.prototype.scanImageFromBase64 = function(base64, callback){
+
+    callback = (typeof callback === 'function') ? callback : function(result){return result;};
+
+    return (function(){
+        return new Promise(function(resolve,reject){
+                    var result = {
+                        base64: base64,
+                        status : false,
+                        err : null
+                    };
+
+                    if(base64 === null || base64 === 'undefined') {
+                        result.err = "Invalid base64 string";
+                        resolve(result);
+                    }
+                    else{
+                        BarcodeScanner.CMBscanImageFromBase64(base64, function(res){
+                            result.status = true;
+                            resolve(result);
+                        }, function(err){
+                            result.err = err;
+                            resolve(result);
+                        });
+                    }
+                })
+        })()
+        .then(callback) //call the callback if it has been set with a traditional method as a parameter
+        .catch(callback); //catch unhandled errors here
+};
+
+/**
+*    @name   : setMDMReportingEnabled
+*    @params : boolean
+*    @desc : enables MDM reporting for remote collection of up-to-date information about battery level, battery health, installed firmware, etc.
+*
+*/
+Scanner.prototype.setMDMReportingEnabled = function(arg){
+
+    arg = (arg) ? true : false;
+    BarcodeScanner.CMBsetMDMReportingEnabled(arg);
+};
+    
+/**
+*    @name   : createMDMAuthCredentials
+*    @params : (string) username, (string) password, (string) clientID, (string) clientSecret
+*    @desc : creates authentication credentials used for MDM reporting.
+*
+*/
+Scanner.prototype.createMDMAuthCredentials = function(username, password, clientID, clientSecret){
+
+    BarcodeScanner.CMBcreateMDMAuthCredentials(username, password, clientID, clientSecret);
+};
+               
 module.exports = new Scanner();

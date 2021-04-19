@@ -4,3 +4,8 @@ framework module cmbSDK {
   export *
   module * { export * }
 }
+
+module cmbSDK.Swift {
+    header "cmbSDK-Swift.h"
+    requires objc
+}
