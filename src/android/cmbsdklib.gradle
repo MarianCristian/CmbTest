@@ -6,22 +6,11 @@ repositories{
 }
 
 dependencies {
-    compile 'com.android.support:support-v4:+'
-    compile(name:'cmbsdklib-release', ext:'aar')
+    implementation 'com.android.support:support-v4:26.+'
+    implementation(name:'cmbsdklib-release', ext:'aar')
 }
 
 android {
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
-    allprojects {
-        compileOptions {
-            sourceCompatibility = JavaVersion.VERSION_1_8
-            targetCompatibility = JavaVersion.VERSION_1_8
-        }
-    }
-    
     packagingOptions {
         exclude 'META-INF/NOTICE'
         exclude 'META-INF/LICENSE'
